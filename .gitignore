@@ -1,0 +1,24 @@
+# --- Terraform Files ---
+.terraform/             # Local Terraform working directory
+*.tfstate               # Terraform state file
+*.tfstate.* # Terraform state backup files
+*.plan                  # Terraform plan output files
+
+# Sensitive variable definitions (Do NOT commit secrets)
+# NOTE: While *.tfvars files often contain common config, they can contain secrets 
+# and are generally ignored unless explicitly required.
+# For production secrets, use AWS Secrets Manager.
+*.tfvars
+*.tfvars.json
+
+# Crash/Debugging logs
+crash.log
+
+# Dependency lock file (Usually committed in root/config repos, but often ignored for modules)
+# Remove this line if you decide to commit dependency locks for the module:
+.terraform.lock.hcl
+
+# --- Operating System Files ---
+.DS_Store               # macOS files
+.vscode/                # VSCode settings (if not shared)
+

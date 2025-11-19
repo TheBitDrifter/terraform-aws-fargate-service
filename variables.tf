@@ -4,9 +4,26 @@ variable "aws_region" {
   type        = string
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g., 'dev', 'staging', 'prod'). Used for resource naming and tagging."
+  type        = string
+}
+
 variable "service_name" {
   description = "Mandatory, unique service identifier (e.g., 'user-api'). Enforces resource naming convention."
   type        = string
+}
+
+variable "create_ecr" {
+  description = "Whether to create the ECR repository. Set to true for the environment that owns the repo (e.g., staging), false for others (e.g., prod)."
+  type        = bool
+  default     = true
+}
+
+variable "ecr_repository_name" {
+  description = "Name of the ECR repository. Defaults to service_name if not provided. Useful when multiple environments share the same repo but have different service names (e.g. previews)."
+  type        = string
+  default     = null
 }
 
 variable "image_url" {
@@ -108,4 +125,16 @@ variable "path_pattern" {
 variable "api_route_key" {
   description = "The API Gateway route key (e.g., 'ANY /users/{proxy+}'). Defines the public contract."
   type        = string
+}
+
+variable "task_role_policy_json" {
+  description = "JSON policy document for the ECS Task Role. Allows the app to access specific AWS resources."
+  type        = string
+  default     = null
+}
+
+variable "listener_rule_priority" {
+  description = "Priority for the ALB listener rule. Must be unique per listener. Leave null to auto-assign."
+  type        = number
+  default     = null
 }

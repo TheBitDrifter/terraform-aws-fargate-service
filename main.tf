@@ -1,6 +1,6 @@
 # IAM Role (Enforcing Least Privilege)
 resource "aws_iam_role" "ecs_task_execution" {
-  name_prefix = "${var.service_name}-exec-role-"
+  name = "${var.service_name}-${var.environment}-exec-role"
 
   # Assumes role policy for ecs-tasks.amazonaws.com
   assume_role_policy = jsonencode({
@@ -21,11 +21,38 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# --- TASK ROLE (App Permissions) ---
+# Allows the application code to access AWS services (S3, DynamoDB, etc.)
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${var.service_name}-${var.environment}-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+    }]
+  })
+}
+
+# Attach custom policy if provided
+resource "aws_iam_role_policy" "ecs_task_role_policy" {
+  count = var.task_role_policy_json != null ? 1 : 0
+  name  = "${var.service_name}-${var.environment}-task-policy"
+  role  = aws_iam_role.ecs_task_role.id
+  policy = var.task_role_policy_json
+}
+
+# --- ECR REPOSITORY ---
 # --- ECR REPOSITORY ---
 resource "aws_ecr_repository" "this" {
-  name                 = lower(var.service_name)
+  count                = var.create_ecr ? 1 : 0
+  name                 = lower(coalesce(var.ecr_repository_name, var.service_name))
   image_tag_mutability = "IMMUTABLE"
-  force_delete         = true
+  force_delete         = true # WARNING: Deletes all images when destroyed. Accepted risk for non-prod/demos.
 
   image_scanning_configuration {
     scan_on_push = true
@@ -36,19 +63,25 @@ resource "aws_ecr_repository" "this" {
   }
 }
 
+data "aws_ecr_repository" "this" {
+  count = var.create_ecr ? 0 : 1
+  name  = lower(coalesce(var.ecr_repository_name, var.service_name))
+}
+
 # CloudWatch Log Group (Observability)
 resource "aws_cloudwatch_log_group" "this" {
-  name = "/ecs/${var.service_name}"
+  name = "/ecs/${var.service_name}-${var.environment}"
 }
 
 # ECS Task Definition (Immutability Enforced)
 resource "aws_ecs_task_definition" "this" {
-  family                   = var.service_name
+  family                   = "${var.service_name}-${var.environment}"
   cpu                      = var.cpu
   memory                   = var.memory
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn # Grants permissions to the container
 
   container_definitions = jsonencode([{
     name      = var.service_name,
@@ -71,7 +104,7 @@ resource "aws_ecs_task_definition" "this" {
 
 # ALB Target Group (Defining Load Balancing Targets)
 resource "aws_lb_target_group" "this" {
-  name        = "${var.service_name}-tg"
+  name        = "${var.service_name}-${var.environment}"
   port        = var.container_port
   protocol    = "HTTP"
   target_type = "ip" # Required for Fargate
@@ -84,7 +117,7 @@ resource "aws_lb_target_group" "this" {
 
 # ECS Service (Deployment and Scaling Control)
 resource "aws_ecs_service" "this" {
-  name            = var.service_name
+  name            = "${var.service_name}-${var.environment}"
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.this.arn
   desired_count   = var.desired_count
@@ -126,7 +159,7 @@ resource "aws_lb_listener_rule" "this" {
       values = [var.path_pattern, "/${var.service_name}"]
     }
   }
-  priority = 10 # Control rule evaluation order
+  priority = var.listener_rule_priority
 }
 
 # API Gateway Integration (Public Contract Definition)
@@ -167,7 +200,7 @@ resource "aws_appautoscaling_target" "ecs_target" {
 }
 
 resource "aws_appautoscaling_policy" "cpu_scaling" {
-  name               = "${var.service_name}-cpu-scaling"
+  name               = "${var.service_name}-${var.environment}-cpu-scaling"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.ecs_target.resource_id
   scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
@@ -182,7 +215,7 @@ resource "aws_appautoscaling_policy" "cpu_scaling" {
 }
 
 resource "aws_appautoscaling_policy" "memory_scaling" {
-  name               = "${var.service_name}-memory-scaling"
+  name               = "${var.service_name}-${var.environment}-memory-scaling"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.ecs_target.resource_id
   scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension

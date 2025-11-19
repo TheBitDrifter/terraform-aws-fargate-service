@@ -5,5 +5,5 @@ output "service_url" {
 
 output "ecr_repository_url" {
   description = "The URL of the ECR repository"
-  value       = aws_ecr_repository.this.repository_url
+  value       = var.create_ecr ? aws_ecr_repository.this[0].repository_url : data.aws_ecr_repository.this[0].repository_url
 }

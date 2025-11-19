@@ -43,6 +43,33 @@ graph LR
 
 ---
 
+## 3. Shared ECR Strategy
+
+This module supports a **"Build Once, Deploy Anywhere"** strategy where one environment owns the ECR repository and others consume it.
+
+*   **Owner Environment** (e.g., `dev`): Set `create_ecr = true`. This creates the repository.
+*   **Consumer Environments** (e.g., `staging`, `prod`): Set `create_ecr = false`. This looks up the existing repository.
+
+### Example Configuration
+
+**Dev (Owner):**
+```hcl
+module "service" {
+  environment = "dev"
+  create_ecr  = true
+  # ...
+}
+```
+
+**Prod (Consumer):**
+```hcl
+module "service" {
+  environment = "prod"
+  create_ecr  = false
+  # ...
+}
+```---
+
 ## 💻 Module Usage Example
 
 This example demonstrates how to deploy a new service (e.g., `user-api`) by consuming the necessary IDs from a shared platform module.
@@ -71,6 +98,8 @@ module "user_api_service" {
 
   # Service Unique Details
   service_name   = "user-api"
+  environment    = "staging" # or "prod"
+  create_ecr     = true      # true for staging, false for prod
   image_url      = var.user_service_image_url
   container_port = 3000
   desired_count  = 3
